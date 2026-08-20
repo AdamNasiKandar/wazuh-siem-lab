@@ -249,6 +249,8 @@ tar -tvf wazuh-install-files.tar | grep <node-name>
 
 Confirm the node name appears in the tarball before retrying the install.
 
+---
+
 ### Update — Elastic IP attached
 
 An Elastic IP has since been attached to the EC2 instance, resolving the
