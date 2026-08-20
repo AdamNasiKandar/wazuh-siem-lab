@@ -1,0 +1,19 @@
+# Credentials / secrets — never commit these
+.aws/
+*.pem
+*credentials*
+*.key
+
+# Logs and raw data dumps
+*.log
+/var/log/
+ossec.log
+
+# Real config exports (sanitize before committing if you ever add these)
+ossec.conf
+docker-compose.override.yml
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
