@@ -5,10 +5,8 @@ practical detection engineering, log ingestion, and incident response —
 covering endpoint monitoring, cloud (AWS CloudTrail) log ingestion, File
 Integrity Monitoring, and automated Active Response.
 
-This repo documents the environment, what was configured, and — just as
-importantly — the real problems hit along the way and how they were
-diagnosed. Most tutorials show the happy path; this is closer to what
-actually happens when you build one of these yourself.
+This repo documents the environment, what was configured, and the problems hit along the way and how they were
+diagnosed.
 
 ## Architecture
 
