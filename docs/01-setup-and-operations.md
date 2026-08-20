@@ -328,20 +328,30 @@ minute or two.
 ---
 
 ## Part 5 — Day-to-day operation & restarting
+### Starting the stack
 
-### Order matters
-
-Start **Docker/manager first, then the agents/VM** — that way agents
-find the manager already listening when they start, instead of retrying
-for a bit before connecting.
+Since all three services have `restart: always` set in `docker-compose.yml`,
+the Wazuh stack **auto-starts** whenever the EC2 instance boots and Docker
+comes up — no manual `docker-compose up -d` needed after a stop/start cycle.
+Confirm it's actually up before assuming a problem:
 
 ```bash
-cd ~/wazuh-docker/single-node
-sudo docker-compose up -d
-sudo docker ps
+sudo docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
-Should be reachable at the dashboard URL within 20–30 seconds on restart
-(much faster than first boot, since data/certs already exist).
+
+### Order still matters, just differently now
+
+Even though the stack auto-starts, it still takes **1–3 minutes** to fully
+initialize (indexer building indices, manager connecting) before it's ready
+to accept agent connections. Start the **EC2 instance first**, then the
+agents/VM a few minutes later — agents that connect too early will just
+retry until the manager is ready, not fail outright, but starting the
+instance first avoids unnecessary retry delay.
+
+**Manual `docker-compose up -d` is only needed if:**
+- You explicitly ran `docker-compose down` (stops *and* removes containers —
+  `restart: always` has nothing to restart)
+- You're setting up the stack fresh for the first time
 
 ### IP changes — resolved via Elastic IP
 
