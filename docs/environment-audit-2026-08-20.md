@@ -130,6 +130,21 @@ naming as originally assumed.
 placed as a **top-level element directly under `<ossec_config>`**.
 Result, visible in `ossec.log` after the next restart:
 
+**Linux-side follow-up:** the same phantom-agent pattern occurred on the
+RHEL VM, but with a different underlying mechanism than the Windows fix
+above.
+
+- `manage_agents`'s "extract key" (option `E`) generates a key intended
+  for **manual import** into `client.keys` — it is not compatible with
+  `agent-auth`, which performs its own live SSL-based enrollment against
+  the manager's `authd` service (port 1515) and ignores a `-k` value
+  passed to it as if it were that manual key.
+- Without an explicit name, `agent-auth` defaults to the **actual
+  machine hostname** — and the VM's hostname was literally `localhost`,
+  so every enrollment attempt registered as `localhost.localdomain`,
+  colliding with the previous entry of the same name still known to the
+  manager (`ERROR: Duplicate agent name`).
+
 ---
 
 ## What's already working / confirmed
@@ -210,6 +225,20 @@ intuitive from the docs alone — the same tag name can be valid in one
 location and rejected outright in another, and the resulting error
 (`No client configured. Exiting`) doesn't obviously point back to "wrong
 nesting level" as the cause.
+
+**Actual fix for Linux VM (RHEL 8.10):** force the agent name explicitly at enrollment time, rather than
+relying on hostname defaulting:
+```bash
+sudo /var/ossec/bin/agent-auth -m <manager-ip> -A rhel-8-10-vm
+```
+Confirmed working — manager and dashboard now show both `AdamsLaptop`
+and `RHEL-8.10-VM` as distinct, active agents.
+
+**Longer-term fix considered but not required:** the VM's hostname
+itself is still `localhost`, which would cause the same collision again
+on any future fresh auto-enrollment. Renaming it via `hostnamectl
+set-hostname` would resolve this at the source, independent of the
+Wazuh-specific fix above.
 
 ### Finding — Bucket versioning not enabled → Resolved
 
