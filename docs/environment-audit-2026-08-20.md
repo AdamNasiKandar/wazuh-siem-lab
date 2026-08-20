@@ -101,6 +101,35 @@ enabled** on the CloudTrail bucket. Relevant later: **S3 Object Lock
 requires versioning to be enabled first**, so this needs addressing
 before the Object Lock project can proceed.
 
+### Issue 3 — Phantom duplicate agent on restart ("MSI" reappearing)
+
+**Symptom:** After renaming the Windows agent from its default `MSI` to
+`AdamsLaptop` (via remove + re-add through `manage_agents`), a restart of
+either the laptop or the EC2 manager caused a **new** agent entry named
+`MSI` to appear in the dashboard, while `AdamsLaptop` was left behind,
+disconnected.
+
+**Root cause:** Wazuh agent enrollment is **enabled by default since
+4.3+**, even with no explicit `<enrollment>` block present in
+`ossec.conf`. When the agent's connection was disrupted (service
+restart, lost `client.keys`, etc.), it silently fell back to
+auto-enrolling itself fresh — using the machine's actual Windows
+hostname as the agent name. Confirmed via:
+```powershell
+hostname
+```
+which returned `MSI` — the laptop's hostname, not leftover installer
+naming as originally assumed.
+
+**First fix attempt broke the agent entirely:**
+```xml
+<enrollment>
+  <enabled>no</enabled>
+</enrollment>
+```
+placed as a **top-level element directly under `<ossec_config>`**.
+Result, visible in `ossec.log` after the next restart:
+
 ---
 
 ## What's already working / confirmed
@@ -139,6 +168,48 @@ Added `cloudtrail:DescribeTrails`, `cloudtrail:GetTrailStatus`, and
 support resource-level restriction) to `wazuh-cloudtrail-reader`'s
 policy. Re-ran the previously-failing commands — all return real JSON
 output instead of `AccessDeniedException`.
+
+### Issue 3 - Phantom duplicate agent on restart ("MSI" reappearing) → Resolved
+
+The agent had actually reconnected successfully under the renamed
+identity right before this — the restart to apply the enrollment
+setting is what broke it, not the rename itself. Worth noting since the
+log timeline made this easy to misread as "the rename didn't work,"
+when it had, in fact, worked until the very next restart.
+
+**Actual fix:** `<enrollment>` must be nested **inside `<client>`**, not
+as a sibling of it:
+```xml
+<client>
+  <server>
+    <address><manager-ip></address>
+    <port>1514</port>
+    <protocol>tcp</protocol>
+  </server>
+  <config-profile>windows, windows11</config-profile>
+  <notify_time>10</notify_time>
+  <time-reconnect>60</time-reconnect>
+  <auto_restart>yes</auto_restart>
+  <crypto_method>aes</crypto_method>
+  <enrollment>
+    <enabled>no</enabled>
+  </enrollment>
+</client>
+```
+After correcting the nesting and restarting the service, the agent
+reconnected as `AdamsLaptop` with no configuration error and no new
+phantom agent created.
+
+**Verification:** confirmed via `ossec.log` showing `Connected to the
+server` / `Agent is now online` with no subsequent config error, and via
+`agent_control -l` on the manager showing only `AdamsLaptop` active —
+no new `MSI` entry.
+
+**Takeaway:** XML schema nesting in Wazuh's config isn't always
+intuitive from the docs alone — the same tag name can be valid in one
+location and rejected outright in another, and the resulting error
+(`No client configured. Exiting`) doesn't obviously point back to "wrong
+nesting level" as the cause.
 
 ### Finding — Bucket versioning not enabled → Resolved
 
