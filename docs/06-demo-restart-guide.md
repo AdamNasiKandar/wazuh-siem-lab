@@ -248,3 +248,16 @@ tar -tvf wazuh-install-files.tar | grep <node-name>
 ```
 
 Confirm the node name appears in the tarball before retrying the install.
+
+### Update — Elastic IP attached
+
+An Elastic IP has since been attached to the EC2 instance, resolving the
+IP-change problem described above. The public IP is now static across
+stop/start cycles, so agents no longer need `ossec.conf`'s `<address>`
+field updated after a restart — confirmed both the RHEL VM and PC agent
+still show **Active** in the dashboard without any reconfiguration.
+
+**Note:** Elastic IPs are free while attached to a running instance, but
+AWS charges an hourly fee if one is allocated but left unattached (e.g.
+instance stopped for an extended period without being terminated) —
+worth remembering if this environment is ever paused long-term.
