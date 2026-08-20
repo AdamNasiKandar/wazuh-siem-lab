@@ -165,16 +165,9 @@ needed for. This mirrors the principle behind just-in-time / temporary
 elevated access in production environments, done manually here since
 there's no automation tooling in this lab.
 
-**Decision on read/write separation:** considered splitting this into
+**Decision on read/write separation:** considering splitting this into
 two IAM users (one strictly read-only, one for write/hardening
-actions) as the more production-representative pattern, but decided
-against it for this environment — this is a non-production lab with no
-real data at risk, and the account has MFA enabled on console login.
-Note: MFA protects console sign-in specifically, not access-key-based
-CLI/API auth — a leaked access key would not be stopped by MFA on its
-own (that would require the separate MFA-protected-API-access /
-temporary STS token pattern). Combining read/write on one user was a
-conscious trade-off for a lab context, not an oversight.
+actions) as the more production-representative pattern.
 
 ### Root user access key — checked, not an issue
 
