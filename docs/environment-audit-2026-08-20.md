@@ -185,6 +185,8 @@ individually secret, but should be swapped for `<account-id>` /
 `<arn>` placeholders before any of this goes into the repo, a
 screenshot, or a write-up.
 
+Elastic IP setup, so agents are not required to reconfigure every time AWS server is stopped/restarted
+
 ---
 
 ## Next steps (in order)
