@@ -165,7 +165,7 @@ Despite issue #8, everything up to the final block genuinely works:
   JSON parsing — confirmed via its own log output
   (`active-response/active-responses.log`)
 
-## Possible next steps (not pursued tonight)
+## Possible next steps (not pursued so far)
 
 1. **Check for a newer Wazuh agent version** — this may be a
    version-specific bug already fixed upstream. Compare
