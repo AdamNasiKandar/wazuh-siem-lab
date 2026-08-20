@@ -44,14 +44,10 @@ diagnosed.
 | File Integrity Monitoring (FIM) | ✅ Working | [`docs/03-fim-setup.md`](docs/03-fim-setup.md) |
 | Custom detection rule + Active Response trigger | ✅ Working (detection + trigger both fire correctly) | [`docs/04-active-response-blocking.md`](docs/04-active-response-blocking.md) |
 | Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug | [`docs/04-active-response-blocking.md`](docs/04-active-response-blocking.md) |
-| Local demo environment (Docker Desktop + VM) | ✅ Working | [`docs/06-demo-restart-guide.md`](docs/06-demo-restart-guide.md) |
+| Local demo environment (Desktop + VM) | ✅ Working | [`docs/06-demo-restart-guide.md`](docs/06-demo-restart-guide.md) |
 
 The Active Response item is intentionally left showing the "⚠️" status
 rather than papered over — see that doc for the full root-cause writeup.
-Being able to say *"I traced this to a bug in Wazuh's compiled Windows
-binary, confirmed it via the binary's own log output, and here are three
-ways I'd resolve it"* is a stronger portfolio signal than a repo where
-everything suspiciously works on the first try.
 
 ## Repo structure
 
