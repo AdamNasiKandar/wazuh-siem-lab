@@ -279,7 +279,7 @@ action needed.
 
 ## Housekeeping note
 
-Real AWS account ID (`454805669984`) and full IAM ARNs appeared in
+Real AWS account ID and full IAM ARNs appeared in
 plaintext across pasted terminal output during this audit. Not
 individually secret, but should be swapped for `<account-id>` /
 `<arn>` placeholders before any of this goes into the repo, a
