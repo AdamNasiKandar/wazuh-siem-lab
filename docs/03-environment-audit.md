@@ -303,6 +303,6 @@ Elastic IP setup, so agents are not required to reconfigure every time AWS serve
 - [x] Fix container AWS credentials (Issue 1)
 - [x] Update IAM policy with missing CloudTrail/EC2 read permissions (Issue 2)
 - [x] Enable S3 bucket versioning (prerequisite for Object Lock project)
-- [ ] Rename agents 004 and 006 to meaningful names
-- [ ] Remove or replace tutorial rule 100001
+- [x] Rename agents to meaningful names
+- [x] Remove or replace tutorial rule 100001
 - [ ] Begin S3 Object Lock / hardening project
