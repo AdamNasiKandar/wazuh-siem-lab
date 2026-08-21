@@ -238,7 +238,7 @@ nesting level" as the cause.
 **Actual fix for Linux VM (RHEL 8.10):** force the agent name explicitly at enrollment time, rather than
 relying on hostname defaulting:
 ```bash
-sudo /var/ossec/bin/agent-auth -m <manager-ip> -A RHEL-8.10-VM
+sudo /var/ossec/bin/agent-auth -m <manager-ip> -A rhel-8-10-vm
 ```
 Confirmed working — manager and dashboard now show both `AdamsLaptop`
 and `RHEL-8.10-VM` as distinct, active agents.
@@ -298,11 +298,155 @@ Elastic IP setup, so agents are not required to reconfigure every time AWS serve
 
 ---
 
+## Issue 4 — End-to-end verification of rule 100102 (successive connections)
+
+**Goal:** confirm rule `100102` (multiple web requests from the same
+source within 60 seconds) fires on genuine attacker→victim traffic —
+RHEL VM as attacker, Windows PC's Apache as victim — not just a manually
+pasted `wazuh-logtest` line.
+
+This turned into a multi-layered troubleshooting session, each fix
+uncovering the next issue underneath. Documented in the order
+discovered, since each step's root cause only became clear after
+ruling out the previous one.
+
+### 4.1 — NAT hairpinning masked the real source IP
+
+Initial test used `curl` from the RHEL VM (running under VMware
+Workstation, NAT-mode adapter) against the Windows PC's Apache. The
+resulting Apache log entries showed the **Windows PC's own LAN IP**
+as the source, not the VM's.
+
+**Root cause:** the VM's NAT adapter routes outbound traffic through
+the host machine's own network stack. Since the "attacker" (VM) and
+"victim" (Apache) both ultimately live on the same physical host, the
+connection hairpins — by the time it reaches Apache, the OS reports the
+host's own IP as the source, not the VM's internal NAT address
+(`192.168.240.128`/`192.168.122.1`). `wazuh-logtest` fired correctly on
+this data (proving the rule logic itself was sound), but it wasn't
+testing genuine attacker-distinct traffic.
+
+**Fix:** switched the VM's network adapter from **NAT** to **Bridged**
+in VMware Workstation (Edit → Virtual Network Editor), giving the VM
+its own real address directly on the LAN (`192.168.0.201`).
+
+### 4.2 — Bridged networking broke over Wi-Fi (partially)
+
+After switching to bridged mode, the VM received a genuine
+`192.168.0.x` address, but `ping` from VM → Windows PC failed (PC → VM
+ping worked fine).
+
+**Root cause:** the Windows PC connects to the home network over
+**Wi-Fi**, and `Get-NetConnectionProfile` showed the connection
+classified as **Public**. Windows Defender Firewall's default Public
+profile blocks inbound ICMP Echo Requests — explaining the one-way
+failure (Linux's default firewall doesn't block outbound/inbound ICMP
+the same way).
+
+**Fix:** added an explicit inbound allow rule rather than reclassifying
+the whole network profile:
+```powershell
+netsh advfirewall firewall add rule name="Allow ICMPv4-In (VM lab)" protocol=icmpv4:8,any dir=in action=allow
+```
+Ping succeeded both directions afterward.
+
+### 4.3 — Leftover Wazuh server components on the VM
+
+While troubleshooting, an unrelated alert surfaced: repeated
+`wazuh-dashboard.service` crashes on the RHEL VM (rule `40704`,
+`firedtimes: 79` — clogging the alert log).
+
+**Root cause:** a full Wazuh server install (`wazuh-indexer`,
+`wazuh-dashboard`) had been done on the VM at some earlier point,
+alongside the intended `wazuh-agent`. Both leftover services were
+`enabled` and repeatedly failing to start.
+
+**Fix:**
+```bash
+sudo systemctl stop wazuh-dashboard wazuh-indexer wazuh-indexer-performance-analyzer
+sudo systemctl disable wazuh-dashboard wazuh-indexer wazuh-indexer-performance-analyzer
+sudo yum remove -y wazuh-dashboard wazuh-indexer
+sudo rm -f /etc/systemd/system/wazuh-dashboard.service   # leftover manual unit file blocking a clean `mask`
+sudo systemctl daemon-reload
+```
+`wazuh-agent` was left untouched and confirmed still healthy afterward
+(`systemctl status wazuh-agent` — all 5 expected processes running, no
+errors). Noted in passing: the VM also has a PostgreSQL install being
+picked up by the log collector (`/var/lib/pgsql/data/log/...`), likely
+an unrelated leftover from the same earlier install — not touched, just
+flagged as a known oddity on this VM.
+
+### 4.4 — Windows agent's Apache `<localfile>` block had disappeared
+
+With networking and the VM cleaned up, fresh curl traffic still didn't
+produce a `100102` alert. Checking the Windows agent's `ossec.conf`
+showed **only the default out-of-the-box localfile entries**
+(Application/Security/System event channels, active-response log) —
+the `<localfile>` block for `C:\Apache24\logs\access_log` (added earlier
+during the Active Response project, see
+`docs/02-detection-capabilities.md`) was gone entirely.
+
+**Root cause not fully confirmed** — most likely explanation is that a
+service/MSI-level operation during the earlier agent rename/re-enrollment
+work regenerated `ossec.conf` from defaults rather than preserving the
+edited version. Worth treating as a known risk on this agent rather
+than a one-off.
+
+**Fix:** re-added the block, restarted, and explicitly re-verified it
+persisted through the restart before re-testing:
+```xml
+<localfile>
+  <log_format>syslog</log_format>
+  <location>C:\Apache24\logs\access_log</location>
+</localfile>
+```
+```powershell
+Get-Content "C:\Program Files (x86)\ossec-agent\ossec.conf" | Select-String -Context 2 "Apache24"
+```
+
+**Mitigation adopted:** keep a backup copy of a known-working
+`ossec.conf` outside the ossec-agent install folder, to restore from
+rather than rebuild from memory if this recurs:
+```powershell
+Copy-Item "C:\Program Files (x86)\ossec-agent\ossec.conf" "$env:USERPROFILE\Desktop\ossec-working-backup.conf"
+```
+
+### 4.5 — Confirmed working, end-to-end
+
+With all four issues above resolved, a fresh curl loop from the VM
+(`192.168.0.201`) against the Windows PC's Apache produced a genuine,
+correctly-attributed alert:
+
+```
+Rule: 100102 (level 10) -> "Multiple web requests from same source
+within 60 seconds - possible scanning/successive connection"
+agent: AdamsLaptop (007)
+srcip: 192.168.0.201
+firedtimes: 6
+```
+
+Active Response triggered immediately after (`netsh.exe - add`,
+rule `657`), and the alert appears correctly in the dashboard under the
+Windows agent. This is the first fully genuine (not `wazuh-logtest`
+simulated) end-to-end confirmation of this rule and its Active Response
+binding.
+
+**Note:** Active Response's known downstream limitation (the compiled
+`netsh.exe` binary failing to parse `srcip` from the alert JSON, so the
+actual firewall block never applies — see
+`docs/02-detection-capabilities.md`) was not re-tested as part of this
+verification; worth a follow-up check to confirm whether that bug still
+applies now that the trigger chain has been proven fresh.
+
+---
+
 ## Next steps (in order)
 
 - [x] Fix container AWS credentials (Issue 1)
 - [x] Update IAM policy with missing CloudTrail/EC2 read permissions (Issue 2)
 - [x] Enable S3 bucket versioning (prerequisite for Object Lock project)
-- [x] Rename agents to meaningful names
-- [x] Remove or replace tutorial rule 100001
+- [x] Rename agents to meaningful names (AdamsLaptop, RHEL-8.10-VM)
+- [x] Remove tutorial rule 100001
+- [x] Verify rule 100102 end-to-end with genuine attacker→victim traffic (Issue 4)
+- [ ] Confirm whether the netsh.exe Active Response bug still applies post-verification
 - [ ] Begin S3 Object Lock / hardening project
