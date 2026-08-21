@@ -238,7 +238,7 @@ nesting level" as the cause.
 **Actual fix for Linux VM (RHEL 8.10):** force the agent name explicitly at enrollment time, rather than
 relying on hostname defaulting:
 ```bash
-sudo /var/ossec/bin/agent-auth -m <manager-ip> -A rhel-8-10-vm
+sudo /var/ossec/bin/agent-auth -m <manager-ip> -A RHEL-8.10-VM
 ```
 Confirmed working — manager and dashboard now show both `AdamsLaptop`
 and `RHEL-8.10-VM` as distinct, active agents.
