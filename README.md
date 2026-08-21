@@ -48,7 +48,7 @@ diagnosed.
 | Agent enrollment (RHEL VM + Windows PC) | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
 | File Integrity Monitoring (FIM) | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
 | Custom detection rule + Active Response trigger | ✅ Working (detection + trigger both fire correctly) | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
-| Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug (confirmed, reported to Wazuh) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
+| Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug (confirmed) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
 | S3 bucket versioning | ✅ Enabled | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | S3 Object Lock | 🔜 Planned (prerequisite done) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 
