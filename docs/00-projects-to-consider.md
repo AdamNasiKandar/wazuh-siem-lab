@@ -4,6 +4,8 @@ Small-to-medium projects
 - **CloudTrail log file validation** — enable the SHA-256 digest chain, write a script to verify the log chain hasn't been tampered with
 - **Write-only IAM user** — the one still on the back burner, separating read (wazuh-cloudtrail-reader) from write/hardening actions
 - **MITRE ATT&CK mapping** — tag your existing rules (100100, 100102) with technique IDs and document it
+- **netsh.exe re-check** — ✅ done
+- **Write a custom PowerShell Active Response script**
 
 ---
 
