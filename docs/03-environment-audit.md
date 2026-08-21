@@ -431,45 +431,11 @@ Windows agent. This is the first fully genuine (not `wazuh-logtest`
 simulated) end-to-end confirmation of this rule and its Active Response
 binding.
 
-**Note:** Active Response's known downstream limitation (the compiled
-`netsh.exe` binary failing to parse `srcip` from the alert JSON, so the
-actual firewall block never applies — see
-`docs/02-detection-capabilities.md`) was not re-tested as part of this
-verification; worth a follow-up check to confirm whether that bug still
-applies now that the trigger chain has been proven fresh.
-
-### 4.6 — Confirmed: `netsh.exe` bug still applies, unchanged
-
-Re-tested after the full networking/agent rework above. Result: **identical
-failure**, every single trigger:
-
-```
-active-response/bin/netsh.exe: Cannot read 'srcip' from data
-```
-
-Confirmed via `active-responses.log` across four separate triggers
-(`firedtimes: 2` through `6`), all producing the same error. Cross-checked
-that no firewall rule was ever actually created:
-```powershell
-netsh advfirewall firewall show rule name=all | Select-String -Context 2 "wazuh"
-```
-returned nothing.
-
-**Sharper root cause than previously documented:** the alert JSON the
-script receives genuinely does contain `srcip` correctly —
-`"data":{"protocol":"GET","srcip":"192.168.0.201",...}` is present and
-correctly populated in the payload. This rules out any possibility that
-the alert itself is missing the field; the bug is squarely in how the
-compiled `netsh.exe` binary parses/extracts `srcip` from that JSON
-structure internally, not a config or data issue on this end.
-
-**Conclusion:** this is a stable, reproducible upstream bug, unaffected
-by agent version, network topology, or the earlier config-reset issue.
-Confirms the fix path outlined in `docs/02-detection-capabilities.md`
-(write a custom PowerShell/batch Active Response script that parses the
-alert JSON directly and issues `netsh advfirewall firewall add rule`
-itself) is the correct next step — there's nothing left to rule out on
-the "is this actually broken" side.
+**Note:** Active Response's known downstream limitation — a bug in the
+compiled `netsh.exe` binary, confirmed still present and root-caused in
+detail — is tracked separately in `docs/04-known-issues.md`, since it
+remains unresolved upstream rather than something fixed as part of this
+audit.
 
 ---
 
@@ -482,5 +448,6 @@ the "is this actually broken" side.
 - [x] Remove tutorial rule 100001
 - [x] Verify rule 100102 end-to-end with genuine attacker→victim traffic (Issue 4)
 - [x] Confirm whether the netsh.exe Active Response bug still applies post-verification — confirmed still present, same failure mode
-- [ ] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command)
+- [x] Root-cause investigation: ruled out config/version/firewall issues, full config review, matched to open upstream GitHub issue #21812, see `docs/04-known-issues.md`
+- [ ] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command) — see `docs/04-known-issues.md`
 - [ ] Begin S3 Object Lock / hardening project
