@@ -20,19 +20,24 @@ diagnosed.
                     │  └───────────────────────┘  │
                     └──────────────┬──────────────┘
                                    │  agent traffic (1514/1515)
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │   RHEL 8.10 VM (endpoint)    │
-                    │   Wazuh Agent                │
-                    │   - FIM (syscheck)            │
-                    │   - Log collection            │
-                    │   - Active Response target    │
-                    └───────────────────────────────┘
+                         ┌─────────┴─────────┐
+                         │                   │
+            ┌────────────┴──────────┐ ┌──────┴─────────────────┐
+            │  RHEL 8.10 VM          │ │  Windows 11 PC          │
+            │  (RHEL-8.10-VM)        │ │  (AdamsLaptop)          │
+            │  Wazuh Agent           │ │  Wazuh Agent + Apache   │
+            │  - "Attacker" role     │ │  - "Victim" web server  │
+            │  - Log collection      │ │  - FIM (Downloads)      │
+            │  - Bridged networking  │ │  - Active Response      │
+            │                        │ │    target (netsh.exe)   │
+            └────────────────────────┘ └─────────────────────────┘
 ```
 
 - **Manager stack**: Wazuh (manager + indexer + dashboard) via Docker Compose, on an AWS EC2 instance.
 - **Cloud visibility**: AWS CloudTrail → S3 → Wazuh `aws-s3` wodle, so IAM/API activity in the AWS account itself is monitored, not just endpoint activity.
-- **Endpoint**: RHEL 8.10 VM running the Wazuh agent, used for FIM testing, log-based detections, and Active Response.
+- **Endpoints**: two agents report to the manager —
+  - **RHEL 8.10 VM** (`RHEL-8.10-VM`) — runs on VMware Workstation with bridged networking, plays the "attacker" role generating test traffic.
+  - **Windows 11 PC** (`AdamsLaptop`) — runs Apache as the "victim" web server, used for FIM testing (`Downloads` folder monitoring) and as the Active Response target for the custom detection rule.
 
 ## What's implemented
 
@@ -40,10 +45,10 @@ diagnosed.
 |---|---|---|
 | Manager stack on AWS (Docker Compose) | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
 | CloudTrail → S3 → Wazuh ingestion | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
-| Agent enrollment (Linux + Windows) | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
+| Agent enrollment (RHEL VM + Windows PC) | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
 | File Integrity Monitoring (FIM) | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
 | Custom detection rule + Active Response trigger | ✅ Working (detection + trigger both fire correctly) | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
-| Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
+| Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug (confirmed, reported to Wazuh) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
 | S3 bucket versioning | ✅ Enabled | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | S3 Object Lock | 🔜 Planned (prerequisite done) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 
@@ -60,8 +65,9 @@ wazuh-siem-lab/
     │                               agent enrollment, restart procedure, command reference
     ├── 02-detection-capabilities.md  FIM setup + custom detection rule/Active Response case study,
     │                                 with full root-cause debugging logs
-    └── 03-environment-audit.md     Living audit log: environment snapshot, issues found and resolved,
-                                     IAM/S3 hardening decisions
+    ├── 03-environment-audit.md     Living audit log: environment snapshot, issues found and resolved,
+    │                               IAM/S3 hardening decisions
+    └── 04-known-issues.md          Unresolved upstream bugs — root-caused, reported, not yet fixed
 ```
 
 ## Key things I learned building this
