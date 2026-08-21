@@ -243,11 +243,11 @@ sudo /var/ossec/bin/agent-auth -m <manager-ip> -A rhel-8-10-vm
 Confirmed working — manager and dashboard now show both `AdamsLaptop`
 and `RHEL-8.10-VM` as distinct, active agents.
 
-**Longer-term fix considered but not required:** the VM's hostname
-itself is still `localhost`, which would cause the same collision again
-on any future fresh auto-enrollment. Renaming it via `hostnamectl
-set-hostname` would resolve this at the source, independent of the
-Wazuh-specific fix above.
+**Longer-term fix — completed:** the VM's hostname has since been
+changed from `localhost` via `hostnamectl set-hostname`, removing the
+underlying condition that caused this collision in the first place.
+Confirmed independently by the Apache/rule-100102 verification work in
+Issue 4, where the VM shows up correctly as `RHEL-8.10-VM` throughout.
 
 ### Finding — Bucket versioning not enabled → Resolved
 
@@ -438,6 +438,39 @@ actual firewall block never applies — see
 verification; worth a follow-up check to confirm whether that bug still
 applies now that the trigger chain has been proven fresh.
 
+### 4.6 — Confirmed: `netsh.exe` bug still applies, unchanged
+
+Re-tested after the full networking/agent rework above. Result: **identical
+failure**, every single trigger:
+
+```
+active-response/bin/netsh.exe: Cannot read 'srcip' from data
+```
+
+Confirmed via `active-responses.log` across four separate triggers
+(`firedtimes: 2` through `6`), all producing the same error. Cross-checked
+that no firewall rule was ever actually created:
+```powershell
+netsh advfirewall firewall show rule name=all | Select-String -Context 2 "wazuh"
+```
+returned nothing.
+
+**Sharper root cause than previously documented:** the alert JSON the
+script receives genuinely does contain `srcip` correctly —
+`"data":{"protocol":"GET","srcip":"192.168.0.201",...}` is present and
+correctly populated in the payload. This rules out any possibility that
+the alert itself is missing the field; the bug is squarely in how the
+compiled `netsh.exe` binary parses/extracts `srcip` from that JSON
+structure internally, not a config or data issue on this end.
+
+**Conclusion:** this is a stable, reproducible upstream bug, unaffected
+by agent version, network topology, or the earlier config-reset issue.
+Confirms the fix path outlined in `docs/02-detection-capabilities.md`
+(write a custom PowerShell/batch Active Response script that parses the
+alert JSON directly and issues `netsh advfirewall firewall add rule`
+itself) is the correct next step — there's nothing left to rule out on
+the "is this actually broken" side.
+
 ---
 
 ## Next steps (in order)
@@ -448,5 +481,6 @@ applies now that the trigger chain has been proven fresh.
 - [x] Rename agents to meaningful names (AdamsLaptop, RHEL-8.10-VM)
 - [x] Remove tutorial rule 100001
 - [x] Verify rule 100102 end-to-end with genuine attacker→victim traffic (Issue 4)
-- [ ] Confirm whether the netsh.exe Active Response bug still applies post-verification
+- [x] Confirm whether the netsh.exe Active Response bug still applies post-verification — confirmed still present, same failure mode
+- [ ] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command)
 - [ ] Begin S3 Object Lock / hardening project
