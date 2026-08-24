@@ -524,5 +524,5 @@ different causes and fixes.
 - [x] Verify rule 100102 end-to-end with genuine attacker→victim traffic (Issue 4)
 - [x] Confirm whether the netsh.exe Active Response bug still applies post-verification — confirmed still present, same failure mode
 - [x] Root-cause investigation: ruled out config/version/firewall issues, full config review, matched to open upstream GitHub issue #21812, filed reproduction comment — see `docs/04-known-issues.md`
-- [ ] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command) — see `docs/04-known-issues.md`
+- [x] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command) — see `docs/04-known-issues.md`
 - [ ] Begin S3 Object Lock / hardening project
