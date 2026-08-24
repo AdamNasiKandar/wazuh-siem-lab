@@ -14,23 +14,23 @@ diagnosed.
                     ┌─────────────────────────────┐
                     │   AWS EC2 (Docker host)     │
                     │  ┌───────────────────────┐  │
-                    │  │  Wazuh Manager          │  │
-                    │  │  Wazuh Indexer          │──┼──── CloudTrail logs
-                    │  │  Wazuh Dashboard        │  │        (via S3)
+                    │  │  Wazuh Manager        │  │
+                    │  │  Wazuh Indexer        │──┼──── CloudTrail logs
+                    │  │  Wazuh Dashboard      │  │        (via S3)
                     │  └───────────────────────┘  │
                     └──────────────┬──────────────┘
                                    │  agent traffic (1514/1515)
                          ┌─────────┴─────────┐
                          │                   │
             ┌────────────┴──────────┐ ┌──────┴─────────────────┐
-            │  RHEL 8.10 VM          │ │  Windows 11 PC          │
-            │  (RHEL-8.10-VM)        │ │  (AdamsLaptop)          │
-            │  Wazuh Agent           │ │  Wazuh Agent + Apache   │
-            │  - "Attacker" role     │ │  - "Victim" web server  │
-            │  - Log collection      │ │  - FIM (Downloads)      │
-            │  - Bridged networking  │ │  - Active Response      │
-            │                        │ │    target (netsh.exe)   │
-            └────────────────────────┘ └─────────────────────────┘
+            │  RHEL 8.10 VM         │ │  Windows 11 PC         │
+            │  (RHEL-8.10-VM)       │ │  (AdamsLaptop)         │
+            │  Wazuh Agent          │ │  Wazuh Agent + Apache  │
+            │  - "Attacker" role    │ │  - "Victim" web server │
+            │  - Log collection     │ │  - FIM (Downloads)     │
+            │  - Bridged networking │ │  - Active Response     │
+            │                       │ │    target (netsh.exe)  │
+            └───────────────────────┘ └────────────────────────┘
 ```
 
 - **Manager stack**: Wazuh (manager + indexer + dashboard) via Docker Compose, on an AWS EC2 instance.
