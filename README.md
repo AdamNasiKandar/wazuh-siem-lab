@@ -47,8 +47,8 @@ diagnosed.
 | CloudTrail → S3 → Wazuh ingestion | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
 | Agent enrollment (RHEL VM + Windows PC) | ✅ Working | [`docs/01-setup-and-operations.md`](docs/01-setup-and-operations.md) |
 | File Integrity Monitoring (FIM) | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
-| Custom detection rule + Active Response trigger | ✅ Working (detection + trigger both fire correctly) | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
-| Active Response actual block (Windows `netsh.exe`) | ⚠️ Blocked by upstream bug (confirmed) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
+| Custom detection rule + Active Response trigger | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
+| Active Response actual block (Windows) | ✅ Working (custom script, interim fix for upstream `netsh.exe` bug) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
 | S3 bucket versioning | ✅ Enabled | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | S3 Object Lock | 🔜 Planned (prerequisite done) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 
@@ -84,7 +84,7 @@ A few of the more useful, non-obvious lessons (full detail in the linked docs):
 ## Next steps
 
 - [ ] S3 Object Lock on the CloudTrail bucket (versioning prerequisite already enabled)
-- [ ] Write a custom PowerShell Active Response script to replace the bundled `netsh.exe` binary (parse alert JSON directly, issue `netsh advfirewall` command myself)
+- [x] Write a custom PowerShell Active Response script to replace the bundled `netsh.exe` binary — done, confirmed working end-to-end (see `docs/04-known-issues.md`)
 - [ ] Test the Linux equivalent (`firewall-drop.sh`) to confirm whether the JSON-parsing bug is Windows-binary-specific
 - [ ] Map existing custom rules to MITRE ATT&CK technique IDs
 - [ ] Add Suricata/Zeek for network-layer detection alongside host-based FIM/log detections
