@@ -439,6 +439,81 @@ audit.
 
 ---
 
+## Issue 5 — Detection rule silently broken (`if_sid` rule-load failure), corrected
+
+**Context:** while re-verifying the `netsh.exe` Active Response fix in a
+later session (after switching networks, which triggered several
+unrelated network hiccups — see below), rule `100102` stopped
+escalating entirely. Real traffic reached Apache correctly, the base
+rule `31108` fired correctly, but `100102` never appeared in any alert
+output — dashboard, `alerts.log`, or `wazuh-logtest`.
+
+**Two networking hiccups found and fixed along the way, unrelated to
+the actual rule bug:**
+- Home network's security group rules needed the same "My IP is
+  resolved once" fix already documented for SSH — port 443 (dashboard)
+  silently failed after switching from office to home network. Added a
+  second scoped rule for the home IP rather than replacing the existing
+  one, so both networks continue to work.
+- RHEL VM's `ens160` interface showed as `unmanaged` in
+  `nmcli device status` after a network switch — no udev rule, no
+  `NM_CONTROLLED=no`, no conf.d override found; root cause turned out to
+  be simpler than any of that: Networking itself was toggled off at the
+  NetworkManager level. Fixed with `nmcli networking on`.
+
+**The actual rule bug — a documentation correction:**
+
+`docs/02-detection-capabilities.md` previously documented switching
+from `if_matched_sid` to `if_sid` as the fix for this rule not firing.
+**That earlier fix was wrong.** Confirmed definitively via
+`wazuh-analysisd`'s own error log after reverting to `if_sid` during
+this session:
+```
+ERROR: Invalid use of frequency/context options. Missing if_matched on rule '100102'.
+CRITICAL: Error loading the rules: 'etc/rules/local_rules.xml'.
+```
+This is unambiguous: `if_sid` combined with `frequency`/`timeframe`
+causes the entire rules file to fail loading — not silently skip one
+rule. The base rule `31108` kept firing throughout because it comes
+from Wazuh's separate, valid default ruleset; `100102` never had a
+chance to load at all, from either version tested.
+
+**The real fix** — confirmed via a fresh `wazuh-logtest` session
+showing clean two-stage escalation — is `if_matched_sid` referencing a
+proper **intermediate rule**, not the raw base decoder rule directly:
+```xml
+<rule id="100101" level="3">
+  <if_sid>31108</if_sid>
+  <description>Web request logged (intermediate rule for frequency correlation)</description>
+  <group>web,</group>
+</rule>
+
+<rule id="100102" level="10" frequency="20" timeframe="3">
+  <if_matched_sid>100101</if_matched_sid>
+  <same_source_ip />
+  <description>20+ web requests from same source within 3 seconds - possible scanning/DoS</description>
+  <group>web,successive_connection,</group>
+</rule>
+```
+Also took the opportunity to tune the threshold from the original loose
+testing values (`frequency="2" timeframe="60"`, easily triggered by
+normal browsing) to a more realistic `frequency="20" timeframe="3"`.
+
+**Confirmed end-to-end** with a 25-request concurrent burst from the
+RHEL VM: `100101` → `100102` → Active Response → real firewall block,
+all visible in the dashboard within the same second. Corrected in
+`docs/02-detection-capabilities.md`.
+
+**Lesson worth keeping in mind:** an earlier "fix" that was never
+re-verified against a hard failure signal (like an explicit
+`analysisd` load error) can sit undetected for a long time if the
+symptom it was chasing looks similar to a different, unrelated problem
+— in this case, a rule that "doesn't fire" and a rule that "never
+loaded" look identical from the dashboard, but have completely
+different causes and fixes.
+
+---
+
 ## Next steps (in order)
 
 - [x] Fix container AWS credentials (Issue 1)
@@ -448,6 +523,6 @@ audit.
 - [x] Remove tutorial rule 100001
 - [x] Verify rule 100102 end-to-end with genuine attacker→victim traffic (Issue 4)
 - [x] Confirm whether the netsh.exe Active Response bug still applies post-verification — confirmed still present, same failure mode
-- [x] Root-cause investigation: ruled out config/version/firewall issues, full config review, matched to open upstream GitHub issue #21812, see `docs/04-known-issues.md`
+- [x] Root-cause investigation: ruled out config/version/firewall issues, full config review, matched to open upstream GitHub issue #21812, filed reproduction comment — see `docs/04-known-issues.md`
 - [ ] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command) — see `docs/04-known-issues.md`
 - [ ] Begin S3 Object Lock / hardening project
