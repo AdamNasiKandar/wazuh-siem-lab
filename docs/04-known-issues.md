@@ -1,17 +1,20 @@
-# Known Issues (Unresolved)
+# Known Issues (Upstream — Interim Fixes Applied)
 
-Bugs and limitations that have been root-caused in this environment but
-are **not yet fixed** — either because the fix lives upstream (outside
-this environment's control) or because a permanent fix hasn't been
-built yet. Separated from `03-environment-audit.md`, which tracks
-environment state and issues that have actually been resolved.
+Bugs that have been root-caused in this environment but whose real fix
+lives **upstream**, outside this environment's control — tracked here
+separately from `03-environment-audit.md`, which covers environment
+state and issues fully resolved within this environment itself. An
+"interim fix" entry below means the upstream bug is still genuinely
+broken in Wazuh itself, but a working replacement has been built and
+confirmed here.
 
 ---
 
 ## Windows Active Response (`netsh.exe`) fails to parse `srcip`
 
-**Status: confirmed upstream bug, unresolved as of Wazuh 4.14.7. Interim
-fix (custom script) in progress.**
+**Status: confirmed upstream bug, unresolved as of Wazuh 4.14.7 —
+interim fix (custom script) built, deployed, and confirmed working
+end-to-end.**
 
 **Symptom:** the custom detection rule `100102` (multiple web requests
 from the same source within 60 seconds) fires correctly and triggers
@@ -147,3 +150,110 @@ requires an executable, not a raw `.ps1`, registered in `ossec.conf`)
 that parses `srcip` correctly and issues the real
 `netsh advfirewall firewall add rule` command, with automatic
 expiry/removal on the existing 60s Active Response timeout.
+
+---
+
+## Status: Interim fix built, tested, and confirmed working
+
+A custom Active Response script was built to replace the broken
+`netsh.exe` binary. It took three iterations to get right — each
+failure taught something specific about how Wazuh's Windows agent
+actually invokes Active Response scripts, worth documenting since none
+of it was obvious upfront.
+
+### Design
+
+- **`custom-block-ip.cmd`** — thin wrapper registered as the Active
+  Response executable. Captures stdin to a temp file via `findstr "^"`,
+  passes the file path to the PowerShell script.
+- **`custom-block-ip.ps1`** — does the real work: reads the JSON from
+  the file, extracts `srcip` from `parameters.alert.data.srcip`,
+  validates it looks like a real IPv4 address, and calls the real
+  `netsh advfirewall firewall` binary directly (not the
+  `New-NetFirewallRule`/`Remove-NetFirewallRule` PowerShell cmdlets —
+  see below for why) to add or remove a block rule.
+- **Config change**: `ossec.conf`'s `<command>`/`<active-response>`
+  blocks updated to point at `custom-block-ip.cmd` instead of
+  `netsh.exe`, with `<timeout>` lowered from 60s to **30s** — the block
+  auto-expires via Wazuh's own native stateful Active Response
+  mechanism (the same script gets called again with
+  `"command":"delete"` after the timeout), no custom scheduling logic
+  needed.
+
+### Iteration 1 — stdin read via `[Console]::In.ReadToEnd()` hung indefinitely
+
+First version piped JSON directly into PowerShell and read it with
+`[Console]::In.ReadToEnd()`. Manual testing (piping JSON in from an
+interactive PowerShell/cmd session) **crashed outright** with an
+unusual exit code (`0xC06D007E`) before writing anything to the log —
+not a clean reproduction of the real invocation context. When actually
+triggered by the real Wazuh agent, the script logged `Starting` and
+then **hung indefinitely** — no crash, no error, no further log output,
+and a stray `powershell.exe` process left running.
+
+### Iteration 2 — switched to `ReadLine()`, still hung
+
+Reasoned that `ReadToEnd()` waits for the input stream to fully close
+(EOF), while the JSON is actually delivered as a single
+newline-terminated line — so `ReadLine()` should only need to wait for
+the newline, not stream closure. Deployed, retested: **identical
+hang**, same symptom.
+
+**Isolating the real cause:** manually invoking the script via file
+redirection (`cmd /c "custom-block-ip.cmd < test.json"`) rather than a
+live pipe **worked perfectly** — logged the full sequence including a
+successful `Blocked` message. This proved the script's read/parse/block
+logic was correct; the hang was specific to *how* the real Wazuh agent
+service invokes the script, not the reading method.
+
+**Root cause:** `[Console]::In` relies on Windows console API handles.
+The Wazuh agent runs as a Windows Service in **Session 0**, which has
+no attached interactive console — under that context, direct
+console-stream reads can hang indefinitely even though the underlying
+pipe genuinely has data written to it. This is a known category of
+Windows Service quirk, not specific to this script.
+
+### Iteration 3 (final) — capture stdin to a temp file, read as plain file I/O
+
+Rebuilt the `.cmd` wrapper to capture stdin into a temp file first
+(`findstr "^" > tmpfile`, which handles piped input reliably regardless
+of console context), then pass that file's path to the PowerShell
+script via a `-InputFile` parameter. The script reads it with
+`Get-Content -Raw` — plain file I/O, no dependency on console handles
+at all. This is the version that's actually deployed and confirmed
+working (see below).
+
+**Bonus fix while rebuilding:** switched firewall operations from the
+`New-NetFirewallRule`/`Remove-NetFirewallRule` PowerShell cmdlets to
+calling the real `netsh.exe advfirewall firewall` commands directly.
+The cmdlets go through a COM/WMI-backed provider with several seconds
+of overhead per call (~7s measured to add a single rule during manual
+testing) — with only a 30-second block window, that overhead alone
+would eat a meaningful fraction of the block duration. Raw `netsh`
+calls are the same mechanism already proven fast and reliable earlier
+in this environment (the manual ICMP firewall rule from the networking
+troubleshooting).
+
+### Confirmed working, end-to-end
+
+With the corrected script deployed and the detection rule itself fixed
+(see the `if_matched_sid` correction in
+`docs/02-detection-capabilities.md` — a separate, unrelated bug found
+in parallel while retesting this), a real 25-request concurrent burst
+from the RHEL VM produced the full chain:
+
+```
+Rule 100101 fires repeatedly → Rule 100102 escalates (level 10) →
+Active Response 657 triggers (custom-block-ip.cmd - add) →
+custom-block-ip.cmd: Blocked 192.168.0.201 (rule: Wazuh-Block-192.168.0.201)
+```
+
+visible in both `active-responses.log` and the Wazuh dashboard within
+the same second. The block was confirmed to actually apply (not just
+log) via a failed `curl` from the source IP during the block window,
+and the automatic 30-second unblock was confirmed via Wazuh's native
+`"command":"delete"` callback — no manual intervention needed.
+
+**Scalability caveat still applies** — see above. This remains a
+single-agent lab fix, not a production distribution solution, and is
+documented as such.
