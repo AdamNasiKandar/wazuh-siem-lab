@@ -28,8 +28,8 @@ survive recreation).
 | ID | Name | IP | Status | Notes |
 |---|---|---|---|---|
 | 000 | wazuh.manager | 127.0.0.1 | Active/Local | The manager itself, not a real endpoint |
-| 004 | RHEL-8.10-VM | any | Active | RHEL VM |
-| 006 | AdamsLaptop | any | Active | Windows PC  |
+| 004 | localhost.localdomain | any | Active | Likely the RHEL VM — generic default hostname |
+| 006 | MSI | any | Active | Likely the Windows PC — installer placeholder name |
 
 **Action item:** rename both agents to something identifiable
 (`rhel-vm`, `windows-laptop`) so the dashboard/`agent_control -l` output
@@ -514,6 +514,101 @@ different causes and fixes.
 
 ---
 
+## Issue 6 — CloudTrail log file validation enabled and verified
+
+**Goal:** enable CloudTrail's log file validation (SHA-256 digest chain)
+and confirm the chain is genuinely intact — closing out two planned
+hardening items together: enabling the feature, and standing up a
+scoped write path to do it without expanding the read-only
+`wazuh-cloudtrail-reader` user's permissions.
+
+### Credential approach — pivoted mid-task, worth documenting why
+
+**Original plan:** create a dedicated `wazuh-hardening-writer` IAM user
+with narrowly-scoped write permissions and its own static access keys,
+separate from the read-only reader user.
+
+**What happened instead:** creating another long-lived access key was
+flagged as worth avoiding if a safer alternative existed for a one-off
+task. Rather than a new static-key service user, the write action was
+performed using the existing personal admin account (`adam-admin`,
+already holding `AdministratorAccess` — see the IAM identities note
+above), authenticated via **`aws login`** rather than a stored access
+key. This gives temporary, auto-expiring credentials tied to an actual
+console sign-in, with no new standing secret created or left behind
+afterward.
+
+**Important distinction, worth being precise about:** `adam-admin`
+already had the *permissions* to do this the entire time —
+`AdministratorAccess` covers `cloudtrail:UpdateTrail` and everything
+else needed. The `aws login` step was never about authorization
+(what the identity can do); it was purely about authentication (how
+the CLI proves it's genuinely that identity) — using a temporary
+session instead of a static key. For a personal lab, either approach is
+defensible; a static key scoped to `adam-admin`, used only from this
+one EC2 instance, wouldn't have been a meaningful risk. The temporary-
+session route is the better habit for production-style credential
+hygiene, but was arguably more process than the actual risk here
+warranted — noted honestly rather than overstated.
+
+**So, against the original scope of this item:** the *task* (enable log
+file validation without touching the reader user's write permissions)
+is genuinely done. A dedicated `wazuh-hardening-writer` service
+identity, as originally planned, was **not** built — an IAM Role +
+`AssumeRole` pattern (a scoped role the admin user could assume for
+write tasks, rather than either a static-key user or a full-admin
+session) remains a valid follow-up if a non-human/automation use case
+for scoped writes comes up later (e.g. a Lambda-based remediation
+pipeline).
+
+**Real troubleshooting hit along the way:** `aws login` over SSH hits
+the same local-callback-port problem documented earlier in this
+session (`docs/01-setup-and-operations.md`) — the listener
+(`127.0.0.1:<port>`) lives on the EC2 instance, not the machine running
+the browser. Resolved the same way: a second SSH session, opened purely
+to hold an `-L <port>:localhost:<port>` tunnel (port number matched
+exactly to whatever `aws login` printed that run), while the browser
+opened the actual login URL. The first (original) session's terminal
+never touches the tunnel directly — it's the browser that benefits from
+it, via the second session acting purely as a bridge.
+
+### Enabling and verifying
+
+```bash
+aws cloudtrail update-trail --name wazuh-cloudtrail --enable-log-file-validation --profile adam-admin
+aws cloudtrail get-trail-status --name wazuh-cloudtrail
+```
+Confirmed `"LogFileValidationEnabled": true`, with `LatestDigestDeliveryTime`
+showing a real digest file had already been delivered — feature genuinely
+active, not just toggled with nothing happening yet.
+
+### Validating the chain — two more incremental reader permissions needed
+
+Running `aws cloudtrail validate-logs` surfaced two more narrow gaps on
+`wazuh-cloudtrail-reader`, added one at a time as each was hit — same
+iterative least-privilege pattern used earlier in this project:
+
+```json
+{ "Effect": "Allow", "Action": "s3:GetBucketLocation", "Resource": "arn:aws:s3:::aws-wazuh-cloudtrail-logs-454805669984-caa43306" },
+{ "Effect": "Allow", "Action": "cloudtrail:ListPublicKeys", "Resource": "*" }
+```
+(`ListPublicKeys` needed because digest files are cryptographically
+signed; the validator fetches AWS's public keys to verify the
+signature, not just compare hashes — genuinely a different permission
+category from the plain S3 reads already granted.)
+
+### Result
+
+```
+Results found for 2026-08-18T07:06:11Z to 2026-09-02T02:06:11Z:
+357/357 digest files valid
+5960/5960 log files valid
+```
+Full CloudTrail log history since logging began, cryptographically
+verified end-to-end — no tampering, corruption, or gaps in the chain.
+
+---
+
 ## Next steps (in order)
 
 - [x] Fix container AWS credentials (Issue 1)
@@ -525,4 +620,6 @@ different causes and fixes.
 - [x] Confirm whether the netsh.exe Active Response bug still applies post-verification — confirmed still present, same failure mode
 - [x] Root-cause investigation: ruled out config/version/firewall issues, full config review, matched to open upstream GitHub issue #21812, filed reproduction comment — see `docs/04-known-issues.md`
 - [x] Write custom PowerShell Active Response script to replace netsh.exe (parse srcip directly, issue netsh advfirewall command) — see `docs/04-known-issues.md`
+- [x] Enable CloudTrail log file validation and verify the digest chain (Issue 6) — 357/357 digests, 5960/5960 logs valid
+- [ ] Build IAM Role + AssumeRole pattern for scoped write access (follow-up to Issue 6, if a non-human/automation write use case comes up)
 - [ ] Begin S3 Object Lock / hardening project
