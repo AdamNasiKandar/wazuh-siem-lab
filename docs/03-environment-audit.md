@@ -28,8 +28,8 @@ survive recreation).
 | ID | Name | IP | Status | Notes |
 |---|---|---|---|---|
 | 000 | wazuh.manager | 127.0.0.1 | Active/Local | The manager itself, not a real endpoint |
-| 004 | localhost.localdomain | any | Active | Likely the RHEL VM — generic default hostname |
-| 006 | MSI | any | Active | Likely the Windows PC — installer placeholder name |
+| 004 | RHEL-8.10-VM | any | Active | RHEL VM |
+| 006 | AdamsLaptop | any | Active | Windows PC |
 
 **Action item:** rename both agents to something identifiable
 (`rhel-vm`, `windows-laptop`) so the dashboard/`agent_control -l` output
