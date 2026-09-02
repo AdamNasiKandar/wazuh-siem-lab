@@ -23,14 +23,14 @@ diagnosed.
                          ┌─────────┴─────────┐
                          │                   │
             ┌────────────┴──────────┐ ┌──────┴─────────────────┐
-            │  RHEL 8.10 VM         │ │  Windows 11 PC         │
-            │  (RHEL-8.10-VM)       │ │  (AdamsLaptop)         │
-            │  Wazuh Agent          │ │  Wazuh Agent + Apache  │
-            │  - "Attacker" role    │ │  - "Victim" web server │
-            │  - Log collection     │ │  - FIM (Downloads)     │
-            │  - Bridged networking │ │  - Active Response     │
-            │                       │ │    target (netsh.exe)  │
-            └───────────────────────┘ └────────────────────────┘
+            │  RHEL 8.10 VM          │ │  Windows 11 PC        │
+            │  (RHEL-8.10-VM)        │ │  (AdamsLaptop)        │
+            │  Wazuh Agent           │ │  Wazuh Agent + Apache │
+            │  - "Attacker" role     │ │  - "Victim" web server│
+            │  - Log collection      │ │  - FIM (Downloads)    │
+            │  - Bridged networking  │ │  - Active Response    │
+            │                        │ │    target (netsh.exe) │
+            └────────────────────────┘ └───────────────────────┘
 ```
 
 - **Manager stack**: Wazuh (manager + indexer + dashboard) via Docker Compose, on an AWS EC2 instance.
@@ -50,6 +50,7 @@ diagnosed.
 | Custom detection rule + Active Response trigger | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
 | Active Response actual block (Windows) | ✅ Working (custom script, interim fix for upstream `netsh.exe` bug) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
 | S3 bucket versioning | ✅ Enabled | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
+| CloudTrail log file validation | ✅ Enabled, digest chain verified (357/357 digests, 5960/5960 logs) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | S3 Object Lock | 🔜 Planned (prerequisite done) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 
 The Active Response item is intentionally left showing the "⚠️" status
@@ -84,6 +85,7 @@ A few of the more useful, non-obvious lessons (full detail in the linked docs):
 ## Next steps
 
 - [ ] S3 Object Lock on the CloudTrail bucket (versioning prerequisite already enabled)
+- [ ] IAM Role + AssumeRole pattern for scoped write access (in place of a dedicated write-only service user)
 - [x] Write a custom PowerShell Active Response script to replace the bundled `netsh.exe` binary — done, confirmed working end-to-end (see `docs/04-known-issues.md`)
 - [ ] Test the Linux equivalent (`firewall-drop.sh`) to confirm whether the JSON-parsing bug is Windows-binary-specific
 - [ ] Map existing custom rules to MITRE ATT&CK technique IDs
