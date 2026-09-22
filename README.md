@@ -23,14 +23,14 @@ diagnosed.
                          ┌─────────┴─────────┐
                          │                   │
             ┌────────────┴──────────┐ ┌──────┴─────────────────┐
-            │  RHEL 8.10 VM          │ │  Windows 11 PC        │
-            │  (RHEL-8.10-VM)        │ │  (AdamsLaptop)        │
-            │  Wazuh Agent           │ │  Wazuh Agent + Apache │
-            │  - "Attacker" role     │ │  - "Victim" web server│
-            │  - Log collection      │ │  - FIM (Downloads)    │
-            │  - Bridged networking  │ │  - Active Response    │
-            │                        │ │    target (netsh.exe) │
-            └────────────────────────┘ └───────────────────────┘
+            │  RHEL 8.10 VM         │ │  Windows 11 PC          │
+            │  (RHEL-8.10-VM)       │ │  (AdamsLaptop)          │
+            │  Wazuh Agent          │ │  Wazuh Agent + Apache   │
+            │  - "Attacker" role    │ │  - "Victim" web server  │
+            │  - Log collection     │ │  - FIM (Downloads)      │
+            │  - Bridged networking │ │  - Active Response      │
+            │                       │ │    target (netsh.exe)   │
+            └───────────────────────┘ └─────────────────────────┘
 ```
 
 - **Manager stack**: Wazuh (manager + indexer + dashboard) via Docker Compose, on an AWS EC2 instance.
@@ -49,6 +49,7 @@ diagnosed.
 | File Integrity Monitoring (FIM) | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
 | Custom detection rule + Active Response trigger | ✅ Working | [`docs/02-detection-capabilities.md`](docs/02-detection-capabilities.md) |
 | Active Response actual block (Windows) | ✅ Working (custom script, interim fix for upstream `netsh.exe` bug) | [`docs/04-known-issues.md`](docs/04-known-issues.md) |
+| Agentless syslog ingestion (custom decoder + remote listener) | ✅ Working | [`docs/05-agentless-syslog-ingestion.md`](docs/05-agentless-syslog-ingestion.md) |
 | S3 bucket versioning | ✅ Enabled | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | CloudTrail log file validation | ✅ Enabled, digest chain verified (357/357 digests, 5960/5960 logs) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
 | S3 Object Lock | 🔜 Planned (prerequisite done) | [`docs/03-environment-audit.md`](docs/03-environment-audit.md) |
@@ -69,6 +70,8 @@ wazuh-siem-lab/
     ├── 03-environment-audit.md     Living audit log: environment snapshot, issues found and resolved,
     │                               IAM/S3 hardening decisions
     └── 04-known-issues.md          Unresolved upstream bugs — root-caused, reported, not yet fixed
+    └── 05-agentless-syslog-ingestion.md
+                                     Custom decoder + remote syslog listener for unmanaged-host log ingestion
 ```
 
 ## Key things I learned building this
